@@ -161,6 +161,8 @@ section{margin-top:72px}
 .tag.no{border-color:color-mix(in srgb,var(--accent) 45%,transparent); color:var(--accent)}
 .def{display:grid; grid-template-columns:110px 1fr; gap:var(--sp-2xs) var(--sp-s); border-top:1px solid var(--line); padding-top:var(--sp-s)}
 .def dt{color:var(--ink-4); padding-top:2px}
+.dim{color:var(--ink-4)}
+.empty{color:var(--ink-3)}
 .def dd{margin:0; color:var(--ink-2); font-size:13px; line-height:1.55; min-width:0; overflow-wrap:anywhere}
 .acts{display:flex; flex-wrap:wrap; gap:var(--sp-2xs); margin-top:var(--sp-s)}
 .act{
@@ -348,6 +350,7 @@ function card(r, i, kind){
         ${fieldRow('堂食/外带', `${yn(r.dine_in)} / ${yn(r.takeout)}`)}
         ${hours ? fieldRow('营业时间', '<span class="t-mono-xs">' + hours + '</span>') : ''}
         ${fieldRow('纯度得分', '<span class="t-mono-s num">' + r.score + '</span>')}
+        ${fieldRow('加权评分', '<span class="t-mono-s num">' + quality(r).toFixed(2) + '</span> <span class="t-mono-xs dim">按评论数向 4.2 收缩</span>')}
       </dl>
       <div class="acts">
         <a class="act primary" href="${mapsUrl}" target="_blank" rel="noopener">地图</a>
@@ -359,15 +362,20 @@ function card(r, i, kind){
 }
 
 const state = { dist: 99, sort: 'score' };
+/* 评分加权：评论数少的店往整体均值 4.2 收缩，避免「4.3 分 / 4 条评论」压过「4.7 分 / 110 条」 */
+function quality(r){
+  const n = r.reviews ?? 0, prior = 30, mean = 4.2;
+  return ((r.rating ?? mean) * n + mean * prior) / (n + prior);
+}
 function sortFn(a, b){
-  if (state.sort === 'rating') return (b.rating ?? 0) - (a.rating ?? 0) || a.dist_km - b.dist_km;
+  if (state.sort === 'rating') return quality(b) - quality(a);
   if (state.sort === 'dist') return a.dist_km - b.dist_km;
-  return b.score - a.score || a.dist_km - b.dist_km;
+  return b.score - a.score || quality(b) - quality(a);
 }
 function renderPure(){
   const rows = DATA.pure.filter(r => r.dist_km <= state.dist).sort(sortFn);
   $('#list-pure').innerHTML = rows.map((r, i) => card(r, i, 'pure')).join('')
-    || '<div class="row"><div class="rhead t-body-m" style="color:var(--ink-3)">这个范围内没有，把距离放宽一档。</div></div>';
+    || '<div class="row"><div class="rhead t-body-m empty">这个范围内没有，把距离放宽一档。</div></div>';
   $('#count-pure').textContent = rows.length + ' 家';
 }
 function renderRest(){
